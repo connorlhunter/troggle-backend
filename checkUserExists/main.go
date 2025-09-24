@@ -13,14 +13,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// Request represents the JSON input from your UI/API
+// Request represents the JSON input
 type Request struct {
 	Email string `json:"email"` // User email to check
 }
 
-// Response represents the JSON output back to your UI/API
+// Response represents the JSON output
 type Response struct {
-	Exists bool `json:"exists"` // Whether the user exists in DynamoDB
+	Exists bool `json:"exists"`
 }
 
 // UserExists checks if a user with the given email exists in the specified DynamoDB table.
