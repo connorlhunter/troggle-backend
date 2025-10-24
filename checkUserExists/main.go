@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"github.com/aws/aws-lambda-go/events" // API Gateway proxy event definitions
-	"github.com/aws/aws-lambda-go/lambda" // Lambda Go runtime
-	"github.com/aws/aws-sdk-go-v2/aws"    // aws package
-	"github.com/aws/aws-sdk-go-v2/config" // AWS SDK config loader
+	"github.com/aws/aws-lambda-go/lambda" 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
@@ -19,12 +18,17 @@ type Request struct {
 
 // Response represents the JSON output
 type Response struct {
-	Exists bool `json:"exists"`
+	StatusCode int    `json:"statusCode"`
+	Exists     bool   `json:"exists"`
+	Message    string `json:"message,omitempty"`
 }
 
 // UserExists checks if a user with the given email exists in the specified DynamoDB table.
 // Returns true if the user exists, false otherwise.
-func UserExists(email string, db *dynamodb.Client, tableName string) bool {
+func UserExists(email string, db *dynamodb.Client, tableName string) (bool, string) {
+	existsMsg := "User exists"
+	notExistsMsg := "User does not exist"
+
 	log.Printf("Checking if user exists: %s in table %s", email, tableName)
 
 	// use Global Secondary Index to lookup by email rather than cognito user_id
@@ -44,56 +48,56 @@ func UserExists(email string, db *dynamodb.Client, tableName string) bool {
 	result, err := db.Query(context.TODO(), input)
 	if err != nil {
 		log.Printf("Error fetching item from DynamoDB: %v", err)
-		return false
+		return false, notExistsMsg
 	}
 
 	//  A Query returns a slice of items, so check its length
 	if len(result.Items) > 0 {
 		log.Printf("User found: %s", email)
-		return true
+		return true, existsMsg
 	}
 
 	log.Printf("User not found: %s", email)
-	return false
+	return false, notExistsMsg
 }
 
 // handler is the Lambda entry point. It receives an API Gateway event,
 // extracts the email from the request body, checks DynamoDB, and returns JSON.
-func handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(ctx context.Context, payload json.RawMessage) (Response, error) {
 	var req Request
 
 	// Parse JSON body from API Gateway request
-	err := json.Unmarshal([]byte(event.Body), &req)
+	err := json.Unmarshal([]byte(payload), &req)
 	if err != nil {
-		return events.APIGatewayProxyResponse{
+		return Response{
 			StatusCode: 400,
-			Body:       "Invalid request",
-		}, nil
+			Exists:     false,
+			Message:    "Invalid request",
+		}, err
+
 	}
 
 	// Load AWS SDK config (credentials, region, etc.)
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Printf("Error loading AWS config: %v", err)
-		return events.APIGatewayProxyResponse{
+		return Response{
 			StatusCode: 500,
-			Body:       "Server error",
-		}, nil
+			Exists:     false,
+			Message:    "Server error",
+		}, err
 	}
 
 	// Create DynamoDB client
 	db := dynamodb.NewFromConfig(cfg)
 
 	// Check if the user exists
-	exists := UserExists(req.Email, db, "troggle_user")
+	exists, msg := UserExists(req.Email, db, "troggle_user")
 
-	// Marshal response into JSON
-	respBody, _ := json.Marshal(Response{Exists: exists})
-
-	// Return API Gateway response
-	return events.APIGatewayProxyResponse{
+	return Response{
 		StatusCode: 200,
-		Body:       string(respBody),
+		Exists:     exists,
+		Message:    msg,
 	}, nil
 }
 
