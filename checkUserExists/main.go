@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-
 	"github.com/aws/aws-lambda-go/events" // API Gateway proxy event definitions
 	"github.com/aws/aws-lambda-go/lambda" // Lambda Go runtime
 	"github.com/aws/aws-sdk-go-v2/aws"    // aws package
